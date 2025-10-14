@@ -1,0 +1,7 @@
+{
+  "tarifa_hora": 1100,
+  "tolerancia_minutos": 10,
+  "tarifa_dia": 7000,
+  "total_casilleros": 50,
+  "capacidad_por_casillero": 2
+}
