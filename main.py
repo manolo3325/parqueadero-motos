@@ -8,6 +8,7 @@ import pytz
 from math import ceil
 import json
 from pathlib import Path
+import re
 
 # --- Crear todas las tablas ---
 models.Base.metadata.create_all(bind=engine)
@@ -57,16 +58,45 @@ def home():
 
 # Crear propietario
 @app.post("/propietarios/")
-def crear_propietario(nombre: str, telefono: str, db: Session = Depends(get_db)):
+def crear_propietario(nombre: str, apellido: str, telefono: str, db: Session = Depends(get_db)):
+    # ✅ Validar que el nombre y apellido contenga solo letras y espacios
+    if not nombre.isalpha() or not apellido.isalpha():
+        raise HTTPException(status_code=400, detail="El nombre y apellido solo deben contener letras")
+    
+    # ✅ Validar teléfono de 10 dígitos
     if not telefono.isdigit() or len(telefono) != 10:
         raise HTTPException(status_code=400, detail="El teléfono debe tener 10 números")
+
+    nombre = nombre.upper()
+    apellido = apellido.upper()
+    propietario = models.Propietario(nombre=nombre, apellido=apellido, telefono=telefono)
+    db.add(propietario)
+    db.commit()
+    db.refresh(propietario)
+
+    return {
+        "mensaje": "Propietario registrado",
+        "data": {"id": propietario.id, "nombre": propietario.nombre, "apellido": propietario.apellido, "telefono": propietario.telefono}
+    }
+def crear_propietario(nombre: str, telefono: str, db: Session = Depends(get_db)):
+    # ✅ Validar que el nombre contenga solo letras y espacios
+    if not re.match(r'^[A-Za-zÁÉÍÓÚáéíóúÑñ ]+$', nombre):
+        raise HTTPException(status_code=400, detail="El nombre solo puede contener letras y espacios")
+
+    # ✅ Validar teléfono de 10 dígitos
+    if not telefono.isdigit() or len(telefono) != 10:
+        raise HTTPException(status_code=400, detail="El teléfono debe tener 10 números")
+
     nombre = nombre.upper()
     propietario = models.Propietario(nombre=nombre, telefono=telefono)
     db.add(propietario)
     db.commit()
     db.refresh(propietario)
-    return {"mensaje": "Propietario registrado", "data": {"id": propietario.id, "nombre": propietario.nombre}}
 
+    return {
+        "mensaje": "Propietario registrado",
+        "data": {"id": propietario.id, "nombre": propietario.nombre}
+    }
 #Ver propietarios
 @app.get("/propietarios/")
 def listar_propietarios(db: Session = Depends(get_db)):
@@ -105,12 +135,18 @@ def listar_motos(db: Session = Depends(get_db)):
 
 # Registrar entrada
 @app.post("/registros/")
-def crear_registro(placa_moto: str, num_cascos: int, db: Session = Depends(get_db)):
+def crear_registro(placa_moto: str, num_cascos: int, observaciones: str = None, db: Session = Depends(get_db)):
+    placa_moto= placa_moto.upper()
+    moto = db.query(models.Moto).filter(models.Moto.placa == placa_moto).first()
+    if not moto:
+        raise HTTPException(
+            status_code=400,
+            detail="La moto no existe. Primero debes registrar la moto con su propietario."
+        )
+    
     # Validar cantidad de cascos (puede ser 0, 1 o 2)
     if num_cascos < 0 or num_cascos > 2:
         raise HTTPException(status_code=400, detail="El número de cascos debe ser entre 0 y 2")
-
-    placa_moto = placa_moto.upper()
 
     # Verificar si la moto ya tiene un registro activo
     registro_activo = db.query(models.Registro).filter(
@@ -144,6 +180,7 @@ def crear_registro(placa_moto: str, num_cascos: int, db: Session = Depends(get_d
     registro = models.Registro(
         placa_moto=placa_moto,
         cascos=num_cascos,
+	observaciones=observaciones,
         hora_entrada=hora_colombia(),
         id_casillero=casillero.id if casillero else None
     )
@@ -159,6 +196,7 @@ def crear_registro(placa_moto: str, num_cascos: int, db: Session = Depends(get_d
             "placa": registro.placa_moto,
             "hora_entrada": registro.hora_entrada,
             "num_cascos": registro.cascos,
+            "observaciones": registro.observaciones,
             "casillero_asignado": casillero.numero if casillero else "Sin casillero"
         }
     }

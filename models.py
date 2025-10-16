@@ -9,6 +9,7 @@ class Propietario(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String, nullable=False)
+    apellido = Column(String, nullable=False)
     telefono = Column(String(10), nullable=False)
 
     motos = relationship("Moto", back_populates="propietario")
@@ -46,7 +47,6 @@ class Registro(Base):
     valor_pagado = Column(Float, default=0)
     cascos = Column(Integer, default=0)
     id_casillero = Column(Integer, ForeignKey("casilleros.id"))
-
     moto = relationship("Moto", back_populates="registros")
     casillero = relationship("Casillero")
-
+    observaciones = Column(String, nullable=True)
