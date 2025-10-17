@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException, Query, Form
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine
 import models
@@ -97,6 +97,46 @@ def crear_propietario(nombre: str, telefono: str, db: Session = Depends(get_db))
         "mensaje": "Propietario registrado",
         "data": {"id": propietario.id, "nombre": propietario.nombre}
     }
+# 🧾 Editar propietario existente
+@app.put("/propietarios/{id}")
+def editar_propietario(
+    id: int,
+    nombre: str = Form(...),
+    apellido: str = Form(...),
+    telefono: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    # Validaciones
+    if not telefono.isdigit() or len(telefono) != 10:
+        raise HTTPException(status_code=400, detail="El teléfono debe tener 10 números")
+
+    if not nombre.replace(" ", "").isalpha() or not apellido.replace(" ", "").isalpha():
+        raise HTTPException(status_code=400, detail="El nombre y apellido solo pueden contener letras y espacios")
+
+    propietario = db.query(models.Propietario).filter(models.Propietario.id == id).first()
+    if not propietario:
+        raise HTTPException(status_code=404, detail="Propietario no encontrado")
+
+    # Actualizar campos
+    propietario.nombre = nombre.upper()
+    propietario.apellido = apellido.upper()
+    propietario.telefono = telefono
+
+    db.commit()
+    db.refresh(propietario)
+
+    return {
+        "mensaje": "Propietario actualizado correctamente",
+        "data": {
+            "id": propietario.id,
+            "nombre": propietario.nombre,
+            "apellido": propietario.apellido,
+            "telefono": propietario.telefono
+        }
+    }
+
+
+
 #Ver propietarios
 @app.get("/propietarios/")
 def listar_propietarios(db: Session = Depends(get_db)):
