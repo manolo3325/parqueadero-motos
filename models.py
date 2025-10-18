@@ -7,10 +7,9 @@ from datetime import datetime
 class Propietario(Base):
     __tablename__ = "propietarios"
 
-    id = Column(Integer, primary_key=True, index=True)
+    telefono = Column(Integer, primary_key=True, index=True)
     nombre = Column(String, nullable=False)
     apellido = Column(String, nullable=False)
-    telefono = Column(String(10), nullable=False)
 
     motos = relationship("Moto", back_populates="propietario")
 
@@ -20,7 +19,7 @@ class Moto(Base):
     __tablename__ = "motos"
 
     placa = Column(String(6), primary_key=True, index=True)
-    id_propietario = Column(Integer, ForeignKey("propietarios.id"))
+    propietario_telefono = Column(Integer, ForeignKey("propietarios.telefono"))
 
     propietario = relationship("Propietario", back_populates="motos")
     registros = relationship("Registro", back_populates="moto")
@@ -50,3 +49,7 @@ class Registro(Base):
     moto = relationship("Moto", back_populates="registros")
     casillero = relationship("Casillero")
     observaciones = Column(String, nullable=True)
+    tipo_cobro = Column(String, default="por_horas")  # por_horas, por_dia o mensualidad
+    proximo_pago = Column(DateTime, nullable=True)
+    fecha_ultimo_pago = Column(DateTime, nullable=True)
+
