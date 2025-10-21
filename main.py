@@ -1,6 +1,7 @@
-from fastapi import FastAPI, Depends, HTTPException, Query, Form
+from fastapi import FastAPI, Depends, HTTPException, Query, Form, APIRouter
 from sqlalchemy.orm import Session
-from database import SessionLocal, engine
+from sqlalchemy import and_
+from database import SessionLocal, engine, get_db
 import models
 from datetime import datetime, timedelta
 from datetime import timezone
@@ -452,7 +453,6 @@ def registrar_salida(placa_moto: str, db: Session = Depends(get_db)):
     # ===== COBRO POR HORAS =====
     if tipo_cobro == "por_horas":
         if horas_ent < 7:
-            # Tolerancia de 10 minutos
             horas_cobradas = horas_ent
             if minutos_ent > 10:
                 horas_cobradas += 1
@@ -461,7 +461,6 @@ def registrar_salida(placa_moto: str, db: Session = Depends(get_db)):
             valor_total = horas_cobradas * 1100
             mensaje = f"Tiempo: {horas_ent} hora(s) y {minutos_ent} minuto(s). Valor a pagar: ${valor_total:,}"
         else:
-            # Tiempo mayor a 7 horas
             valor_total = 7000
             mensaje = (
                 f"Tiempo: {horas_ent} hora(s) y {minutos_ent} minuto(s). "
@@ -470,18 +469,12 @@ def registrar_salida(placa_moto: str, db: Session = Depends(get_db)):
 
     # ===== COBRO POR DÍA =====
     elif tipo_cobro == "por_dia":
-        if horas_ent < 7:
-            valor_total = 7000
-            mensaje = (
-                f"Tiempo: {horas_ent} hora(s) y {minutos_ent} minuto(s). "
-                "El tiempo fue menor a 7 horas. Puede cobrar por horas o mantener cobro por día ($7.000)."
-            )
-        else:
-            valor_total = 7000
-            mensaje = f"Cobro diario aplicado. Tiempo total: {horas_ent} hora(s) y {minutos_ent} minuto(s). Valor: ${valor_total:,}"
+        valor_total = 7000
+        mensaje = f"Cobro diario aplicado. Tiempo total: {horas_ent} hora(s) y {minutos_ent} minuto(s). Valor: ${valor_total:,}"
 
     # ===== COBRO MENSUALIDAD =====
     elif tipo_cobro == "mensualidad":
+        valor_total = 45000  # valor mensual fijo
         if registro.proximo_pago is None:
             mensaje = "Esta moto está registrada con mensualidad, pero no tiene fecha de pago configurada."
         else:
@@ -494,9 +487,10 @@ def registrar_salida(placa_moto: str, db: Session = Depends(get_db)):
                 mensaje = f"El pago vence hoy ({proximo_pago})."
             else:
                 mensaje = f"El próximo pago es el {proximo_pago}."
-            valor_total = 45000  # valor mensual fijo
 
-    # Guardar cambios en la base de datos
+    # ✅ Guardar correctamente el valor pagado
+    registro.valor_pagado = valor_total
+
     db.commit()
     db.refresh(registro)
 
@@ -509,6 +503,7 @@ def registrar_salida(placa_moto: str, db: Session = Depends(get_db)):
         "valor_total": valor_total,
         "tiempo_total": f"{horas_ent} hora(s) y {minutos_ent} minuto(s)"
     }
+
 
 @app.post("/registros/pago_mensualidad/")
 def pagar_mensualidad(placa_moto: str, db: Session = Depends(get_db)):
@@ -540,4 +535,73 @@ def pagar_mensualidad(placa_moto: str, db: Session = Depends(get_db)):
         "tipo_cobro": registro.tipo_cobro
     }
 
+@app.get("/cuadre_caja")
+def cuadre_caja(
+    fecha_inicio: datetime,
+    fecha_fin: datetime,
+    tipo_cobro: str | None = None,
+    db: Session = Depends(get_db)
+):
+    # Si la fecha fin es el mismo día que inicio, ajustamos a las 23:59:59
+    if fecha_inicio.date() == fecha_fin.date():
+        fecha_fin = fecha_fin.replace(hour=23, minute=59, second=59, microsecond=999999)
 
+    # Filtrar registros dentro del rango de salida
+    query = db.query(Registro).filter(
+        Registro.hora_salida != None,
+        Registro.hora_salida >= fecha_inicio,
+        Registro.hora_salida <= fecha_fin
+    )
+
+    if tipo_cobro:
+        query = query.filter(Registro.tipo_cobro == tipo_cobro)
+
+    registros = query.all()
+
+    resumen = {
+        "por_horas": {"total_cobros": 0, "cantidad_motos": 0},
+        "por_dia": {"total_cobros": 0, "cantidad_motos": 0},
+        "mensualidad": {"total_cobros": 0, "cantidad_motos": 0},
+    }
+
+    total_motos = 0
+    total_recaudado = 0
+    detalles = []
+
+    for r in registros:
+        valor = r.valor_pagado or 0
+        tipo = r.tipo_cobro.lower()
+
+        if tipo in resumen:
+            resumen[tipo]["total_cobros"] += valor
+            resumen[tipo]["cantidad_motos"] += 1
+
+        total_motos += 1
+        total_recaudado += valor
+
+        detalles.append({
+            "placa": r.placa_moto,
+            "tipo_cobro": r.tipo_cobro,
+            "hora_entrada": r.hora_entrada,
+            "hora_salida": r.hora_salida,
+            "valor_pagado": valor,
+        })
+
+    return {
+        "fecha_inicio": fecha_inicio,
+        "fecha_fin": fecha_fin,
+        "tipo_cobro_filtrado": tipo_cobro,
+        "total_motos_salida": total_motos,
+        "total_recaudado": total_recaudado,
+        "resumen_por_tipo": resumen,
+        "detalles": detalles,
+    }
+
+@app.get("/cuadre_caja/hoy")
+def cuadre_caja_hoy(db: Session = Depends(get_db)):
+    zona_horaria = pytz.timezone("America/Bogota")
+    ahora = datetime.now(zona_horaria).replace(tzinfo=None)
+    fecha_inicio = ahora.replace(hour=0, minute=0, second=0, microsecond=0)
+    fecha_fin = ahora.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+    return cuadre_caja(fecha_inicio, fecha_fin, db=db)
