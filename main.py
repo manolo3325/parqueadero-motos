@@ -1,4 +1,7 @@
-from fastapi import FastAPI, Depends, HTTPException, Query, Form, APIRouter
+from fastapi import FastAPI, Depends, Request, HTTPException, Query, Form, APIRouter
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from database import SessionLocal, engine, get_db
@@ -13,6 +16,12 @@ import re
 from dateutil.relativedelta import relativedelta
 from models import Registro, Casillero, Moto
 
+app = FastAPI()
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
+
+
+
 # --- Crear todas las tablas ---
 models.Base.metadata.create_all(bind=engine)
 
@@ -22,8 +31,8 @@ CONFIG_PATH = BASE_DIR / "config.json"
 with open(CONFIG_PATH, "r", encoding="utf-8") as f:
     config = json.load(f)
 
-# --- Crear app FastAPI ---
-app = FastAPI(title="🅿️ Parqueadero de Motos API")
+
+
 
 # --- Función hora Colombia ---
 def hora_colombia():
@@ -53,6 +62,10 @@ def inicializar_casilleros():
 inicializar_casilleros()
 
 # --- ENDPOINTS ---
+
+@app.get("/", response_class=HTMLResponse)
+def home(request: Request):
+    return templates.TemplateResponse("registro_moto.html", {"request": request})
 
 # Inicio
 @app.get("/")
@@ -387,6 +400,27 @@ def crear_registro(
     }
 
 
+@app.post("/registrar_ingreso")
+async def registrar_ingreso(request: Request, db: Session = Depends(get_db)):
+    data = await request.json()
+    placa = data.get("placa", "").upper()
+    tipo_cobro = data.get("tipo_cobro", "por_horas")
+    num_cascos = data.get("num_cascos", 0)
+    observaciones = data.get("observaciones", None)
+
+    try:
+        # Reutilizamos tu lógica existente en /registros/
+        return crear_registro(
+            placa=placa,
+            tipo_cobro=tipo_cobro,
+            num_cascos=num_cascos,
+            observaciones=observaciones,
+            db=db
+        )
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 

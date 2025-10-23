@@ -2,101 +2,100 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Ingreso/Salida Moto</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de moto</title>
     <style>
-        body { font-family: Arial, sans-serif; background: #f4f4f9; padding: 30px; }
-        form { background: white; padding: 20px; border-radius: 8px; max-width: 500px; margin: auto; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        label { display: block; margin-top: 10px; }
-        input[type=text], input[type=number], input[type=tel] { width: 100%; padding: 8px; margin-top: 5px; }
-        button { margin-top: 15px; padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        button:hover { background: #45a049; }
-        .oculto { display: none; }
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f6f9;
+            padding: 30px;
+        }
+
+        .container {
+            max-width: 420px;
+            margin: auto;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+
+        input, button {
+            width: 100%;
+            padding: 8px;
+            margin-top: 8px;
+            border: 1px solid #bbb;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+
+        input:disabled {
+            background-color: #f0f0f0;
+        }
+
+        label {
+            font-weight: bold;
+            margin-top: 10px;
+            display: block;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .success { color: green; }
+        .error { color: red; }
+
+        h2 {
+            text-align: center;
+            color: #333;
+        }
+
+        #botonesIngreso button {
+        width: 32%;
+        margin-right: 2%;
+        display: inline-block;
+    }
     </style>
 </head>
 <body>
-    <h2>Registro de Moto</h2>
-    <form id="formMoto" action="/registrar_moto" method="post">
-        <label>Placa:</label>
-        <input type="text" id="placa" name="placa" maxlength="6" required>
+    <div class="container">
+        <h2>Consulta / Registro de Moto</h2>
 
-        <div id="propietarioCampos" class="oculto">
-            <label>Nombre del propietario:</label>
-            <input type="text" name="nombre" id="nombre">
+            <!-- Placa -->
+    <label for="placa">Placa:</label>
+    <input type="text" id="placa" maxlength="6" placeholder="Ej: ABC12A">
+    <button id="consultarBtn">Consultar</button>
 
-            <label>Teléfono:</label>
-            <input type="tel" name="telefono" id="telefono" maxlength="10">
-        </div>
+    <!-- Teléfono -->
+    <div id="telefonoDiv" class="hidden">
+        <label for="telefono">Teléfono:</label>
+        <input type="text" id="telefono" maxlength="10" placeholder="Ej: 3001234567">
+    </div>
 
-        <div id="cascosCampos" class="oculto">
-            <label>Cantidad de cascos:</label>
-            <input type="number" name="cascos" id="cascos" min="0" value="0" required>
-        </div>
+    <!-- Nombre y Apellido -->
+    <div id="nombreDiv" class="hidden">
+        <label for="nombre">Nombre:</label>
+        <input type="text" id="nombre" placeholder="Nombre">
 
-        <div id="mensajeCasilleros" style="margin-top:10px; font-weight:bold;"></div>
+        <label for="apellidos">Apellidos:</label>
+        <input type="text" id="apellidos" placeholder="Apellidos">
+    </div>
 
-        <button type="submit" id="btnRegistrar" class="oculto">Registrar</button>
-    </form>
+    <!-- Botón Guardar -->
+    <button id="guardarBtn" class="hidden">Guardar</button>
 
-    <script>
-        const placaInput = document.getElementById('placa');
-        const propietarioCampos = document.getElementById('propietarioCampos');
-        const nombreInput = document.getElementById('nombre');
-        const telefonoInput = document.getElementById('telefono');
-        const cascosCampos = document.getElementById('cascosCampos');
-        const btnRegistrar = document.getElementById('btnRegistrar');
-        const mensajeCasilleros = document.getElementById('mensajeCasilleros');
+    <!-- Resultado -->
+    <div id="resultado"></div>
 
-        placaInput.addEventListener('blur', async () => {
-            const placa = placaInput.value.trim().toUpperCase();
-            if (!placa) return;
+    <!-- Botones de ingreso -->
+    <div id="botonesIngreso" style="display:none; margin-top:10px;">
+        <button id="btnHoras">Ingreso por Horas</button>
+        <button id="btnDia">Ingreso por Día</button>
+        <button id="btnMensualidad">Mensualidad</button>
+    </div>
+</div>
 
-            const response = await fetch(`/verificar_placa/${placa}`);
-            const data = await response.json();
-
-            if(data.estado === "dentro"){
-                propietarioCampos.classList.add('oculto');
-                cascosCampos.classList.remove('oculto');
-                btnRegistrar.classList.remove('oculto');
-                mensajeCasilleros.innerText = `Moto dentro. Propietario: ${data.nombre}, Teléfono: ${data.telefono}, Casco(s) dejado(s): ${data.cascos}`;
-                nombreInput.value = data.nombre;
-                telefonoInput.value = data.telefono;
-            }
-            else if(data.estado === "nueva_entrada"){
-                propietarioCampos.classList.add('oculto');
-                cascosCampos.classList.remove('oculto');
-                btnRegistrar.classList.remove('oculto');
-                mensajeCasilleros.innerText = `Moto existente. Propietario: ${data.nombre}, Teléfono: ${data.telefono}`;
-                nombreInput.value = data.nombre;
-                telefonoInput.value = data.telefono;
-            }
-            else if(data.estado === "nueva_moto"){
-                propietarioCampos.classList.remove('oculto');
-                cascosCampos.classList.remove('oculto');
-                btnRegistrar.classList.remove('oculto');
-                mensajeCasilleros.innerText = "";
-                nombreInput.value = "";
-                telefonoInput.value = "";
-            }
-        });
-
-        // Validación antes de enviar
-        document.getElementById('formMoto').addEventListener('submit', function(e) {
-            const placa = placaInput.value.trim();
-            const nombre = nombreInput.value.trim();
-            const telefono = telefonoInput.value.trim();
-
-            if (!placa) {
-                alert("Debe ingresar la placa");
-                e.preventDefault();
-                return;
-            }
-
-            if (!propietarioCampos.classList.contains('oculto') && (!nombre || !telefono)) {
-                alert("❌ Para registrar una nueva moto, debes ingresar nombre y teléfono del propietario");
-                e.preventDefault();
-                return;
-            }
-        });
-    </script>
+<script src="/static/js/registro.js" defer></script>
 </body>
 </html>
